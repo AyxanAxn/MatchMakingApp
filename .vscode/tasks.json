@@ -1,0 +1,19 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build-service",
+      "command": "dotnet",
+      "type": "process",
+      "args": ["build", "${workspaceFolder}/src/MatchMaking.Service/MatchMaking.Service.csproj", "--no-restore"],
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "build-worker",
+      "command": "dotnet",
+      "type": "process",
+      "args": ["build", "${workspaceFolder}/src/MatchMaking.Worker/MatchMaking.Worker.csproj", "--no-restore"],
+      "problemMatcher": "$msCompile"
+    }
+  ]
+}
