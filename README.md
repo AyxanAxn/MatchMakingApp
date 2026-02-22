@@ -4,10 +4,50 @@ A game matchmaking system that groups players into matches using .NET 9, Kafka, 
 
 ## Architecture
 
-- **MatchMaking.Service** - HTTP API for submitting match search requests and retrieving match results
-- **MatchMaking.Worker** - Background worker that consumes player requests and forms matches when enough players are queued
-- **Kafka** - Message broker for async communication between Service and Worker
-- **Redis** - Shared state for player queue coordination and match result storage
+- **MatchMaking.Service** — HTTP API for submitting match search requests and retrieving match results
+- **MatchMaking.Worker** — Background worker that consumes player requests and forms matches when enough players are queued
+- **Kafka** — Message broker for async communication between Service and Worker
+- **Redis** — Shared state for player queue coordination and match result storage
+
+### Project Structure
+
+```
+src/
+├── MatchMaking.Contracts/          # Shared Kafka message contracts
+│   ├── Constants/KafkaTopics.cs
+│   └── Messages/
+│       ├── MatchmakingRequest.cs
+│       └── MatchmakingComplete.cs
+├── MatchMaking.Service/            # ASP.NET Core Minimal API
+│   ├── Api/Endpoints/              # HTTP endpoint definitions
+│   ├── Application/                # CQRS commands, queries, abstractions
+│   │   ├── Abstractions/           # Interfaces (IMatchRepository, IMatchmakingProducer)
+│   │   ├── Commands/               # SearchMatchCommand + Handler
+│   │   └── Queries/                # GetMatchQuery + Handler
+│   ├── Domain/Models/              # Domain records (MatchInfo)
+│   └── Infrastructure/             # Kafka, Redis, middleware implementations
+│       ├── Configuration/
+│       ├── Kafka/
+│       ├── Middleware/
+│       └── Redis/
+└── MatchMaking.Worker/             # .NET Worker Service
+    ├── Application/                # CQRS commands, abstractions
+    │   ├── Abstractions/           # Interfaces (IPlayerQueue, IMatchCompleteProducer)
+    │   └── Commands/               # AccumulatePlayerCommand + Handler
+    └── Infrastructure/             # Kafka, Redis implementations
+        ├── Configuration/
+        ├── Kafka/
+        └── Redis/
+tests/
+├── MatchMaking.Service.Tests/      # Unit tests for Service handlers
+└── MatchMaking.Worker.Tests/       # Unit tests for Worker handlers
+```
+
+The project follows **Onion Architecture** with **CQRS** (via MediatR):
+- **Domain** (innermost) — pure data models with no dependencies
+- **Application** — commands, queries, and interface abstractions
+- **Infrastructure** (outermost) — Kafka, Redis, and configuration implementations
+- **Api** — HTTP endpoint definitions
 
 ### How It Works — Full Request Flow
 
@@ -96,6 +136,22 @@ curl -X POST http://localhost:8080/matchmaking/search -H "Content-Type: applicat
 curl http://localhost:8080/matchmaking/match/player1
 ```
 
+## Running Tests
+
+```bash
+dotnet test
+```
+
+14 unit tests covering all command/query handlers (xUnit + NSubstitute).
+
+## Swagger UI
+
+Once running, the API documentation is available at:
+
+```
+http://localhost:8080/swagger
+```
+
 ## Configuration
 
 ### Worker (appsettings.json)
@@ -112,3 +168,15 @@ curl http://localhost:8080/matchmaking/match/player1
 |---------|---------|-------------|
 | `Kafka:BootstrapServers` | localhost:9092 | Kafka broker address |
 | `Redis:ConnectionString` | localhost:6379 | Redis connection string |
+| `Redis:MatchTtlMinutes` | 60 | TTL for stored match results |
+| `RateLimiter:WindowMs` | 100 | Rate limit window in milliseconds |
+| `RateLimiter:PermitLimit` | 1 | Max requests per window |
+
+## Design Decisions
+
+- **Atomic Redis Lua Script** — The player queue uses a Lua script that runs atomically inside Redis, preventing race conditions when 2 Worker instances consume messages concurrently. No two workers can pop the same players.
+- **CQRS via MediatR** — Separates read (GetMatchQuery) and write (SearchMatchCommand, AccumulatePlayerCommand) operations, keeping handlers focused and testable.
+- **Manual Kafka Commits** — Offsets are committed only after successful processing, ensuring no messages are lost if a consumer crashes mid-processing.
+- **Idempotent Kafka Producers** — Both producers use `Acks.All` and `EnableIdempotence = true` to guarantee exactly-once delivery semantics.
+- **Player Re-queuing on Failure** — If publishing a match result to Kafka fails, players are re-added to the Redis queue so they are not lost.
+- **Rate Limiting** — Fixed-window rate limiter (1 request per 100ms) applied to the search endpoint as per requirements.
