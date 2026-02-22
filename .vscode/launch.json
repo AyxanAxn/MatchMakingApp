@@ -1,0 +1,35 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Service",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-service",
+      "program": "${workspaceFolder}/src/MatchMaking.Service/bin/Debug/net9.0/MatchMaking.Service.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/src/MatchMaking.Service",
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    },
+    {
+      "name": "Worker",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-worker",
+      "program": "${workspaceFolder}/src/MatchMaking.Worker/bin/Debug/net9.0/MatchMaking.Worker.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/src/MatchMaking.Worker",
+      "env": {
+        "DOTNET_ENVIRONMENT": "Development"
+      }
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Service + Worker",
+      "configurations": ["Service", "Worker"]
+    }
+  ]
+}
