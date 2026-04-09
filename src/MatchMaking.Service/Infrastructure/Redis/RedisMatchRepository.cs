@@ -27,7 +27,7 @@ public sealed class RedisMatchRepository : IMatchRepository
         _matchTtl = TimeSpan.FromMinutes(redisOptions.Value.MatchTtlMinutes);
     }
 
-    public async Task<MatchInfo?> GetMatchByUserIdAsync(string userId, CancellationToken cancellationToken = default)
+    public async Task<MatchInfo?> GetMatchByUserIdAsync(string userId, CancellationToken cancellationToken)
     {
         var db = _redis.GetDatabase();
         var value = await db.StringGetAsync($"{MatchKeyPrefix}{userId}");
@@ -46,7 +46,7 @@ public sealed class RedisMatchRepository : IMatchRepository
         return match;
     }
 
-    public async Task SaveMatchAsync(string matchId, string[] userIds, CancellationToken cancellationToken = default)
+    public async Task SaveMatchAsync(string matchId, string[] userIds, CancellationToken cancellationToken)
     {
         var db = _redis.GetDatabase();
         var matchInfo = new MatchInfo(matchId, userIds);
@@ -66,7 +66,7 @@ public sealed class RedisMatchRepository : IMatchRepository
         _logger.LogInformation("Saved match {MatchId} for {PlayerCount} players", matchId, userIds.Length);
     }
 
-    public async Task<bool> IsPlayerInQueueAsync(string userId, CancellationToken cancellationToken = default)
+    public async Task<bool> IsPlayerInQueueAsync(string userId, CancellationToken cancellationToken)
     {
         var db = _redis.GetDatabase();
         var position = await db.ListPositionAsync(QueueKeyName, userId);

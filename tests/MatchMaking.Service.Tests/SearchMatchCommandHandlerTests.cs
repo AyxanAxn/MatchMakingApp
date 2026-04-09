@@ -1,3 +1,4 @@
+using AutoFixture;
 using MatchMaking.Service.Application.Abstractions;
 using MatchMaking.Service.Application.Commands;
 using Microsoft.Extensions.Logging;
@@ -12,6 +13,7 @@ public class SearchMatchCommandHandlerTests
     private readonly IMatchRepository _repository = Substitute.For<IMatchRepository>();
     private readonly ILogger<SearchMatchCommandHandler> _logger = Substitute.For<ILogger<SearchMatchCommandHandler>>();
     private readonly SearchMatchCommandHandler _handler;
+    private readonly Fixture _fixture = new();
 
     public SearchMatchCommandHandlerTests()
     {
@@ -21,10 +23,12 @@ public class SearchMatchCommandHandlerTests
     [Fact]
     public async Task Handle_ValidUserId_ReturnsQueued()
     {
-        _repository.IsPlayerInQueueAsync("player1", Arg.Any<CancellationToken>())
+        var userId = _fixture.Create<string>();
+
+        _repository.IsPlayerInQueueAsync(userId, Arg.Any<CancellationToken>())
             .Returns(false);
 
-        var result = await _handler.Handle(new SearchMatchCommand("player1"), CancellationToken.None);
+        var result = await _handler.Handle(new SearchMatchCommand(userId), CancellationToken.None);
 
         Assert.Equal(SearchMatchResult.Queued, result);
     }
@@ -32,22 +36,26 @@ public class SearchMatchCommandHandlerTests
     [Fact]
     public async Task Handle_ValidUserId_PublishesToKafka()
     {
-        _repository.IsPlayerInQueueAsync("player1", Arg.Any<CancellationToken>())
+        var userId = _fixture.Create<string>();
+
+        _repository.IsPlayerInQueueAsync(userId, Arg.Any<CancellationToken>())
             .Returns(false);
 
-        await _handler.Handle(new SearchMatchCommand("player1"), CancellationToken.None);
+        await _handler.Handle(new SearchMatchCommand(userId), CancellationToken.None);
 
         await _producer.Received(1)
-            .PublishSearchRequestAsync("player1", Arg.Any<CancellationToken>());
+            .PublishSearchRequestAsync(userId, Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task Handle_PlayerAlreadyInQueue_ReturnsAlreadyInQueue()
     {
-        _repository.IsPlayerInQueueAsync("player1", Arg.Any<CancellationToken>())
+        var userId = _fixture.Create<string>();
+
+        _repository.IsPlayerInQueueAsync(userId, Arg.Any<CancellationToken>())
             .Returns(true);
 
-        var result = await _handler.Handle(new SearchMatchCommand("player1"), CancellationToken.None);
+        var result = await _handler.Handle(new SearchMatchCommand(userId), CancellationToken.None);
 
         Assert.Equal(SearchMatchResult.AlreadyInQueue, result);
         await _producer.DidNotReceive()
@@ -57,27 +65,30 @@ public class SearchMatchCommandHandlerTests
     [Fact]
     public async Task Handle_ProducerThrows_ExceptionPropagates()
     {
-        _repository.IsPlayerInQueueAsync("player1", Arg.Any<CancellationToken>())
+        var userId = _fixture.Create<string>();
+
+        _repository.IsPlayerInQueueAsync(userId, Arg.Any<CancellationToken>())
             .Returns(false);
 
-        _producer.PublishSearchRequestAsync("player1", Arg.Any<CancellationToken>())
+        _producer.PublishSearchRequestAsync(userId, Arg.Any<CancellationToken>())
             .ThrowsAsync(new InvalidOperationException("Kafka down"));
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => _handler.Handle(new SearchMatchCommand("player1"), CancellationToken.None));
+            () => _handler.Handle(new SearchMatchCommand(userId), CancellationToken.None));
     }
 
     [Fact]
     public async Task Handle_PassesCancellationToken()
     {
+        var userId = _fixture.Create<string>();
         using var cts = new CancellationTokenSource();
 
-        _repository.IsPlayerInQueueAsync("player1", cts.Token)
+        _repository.IsPlayerInQueueAsync(userId, cts.Token)
             .Returns(false);
 
-        await _handler.Handle(new SearchMatchCommand("player1"), cts.Token);
+        await _handler.Handle(new SearchMatchCommand(userId), cts.Token);
 
         await _producer.Received(1)
-            .PublishSearchRequestAsync("player1", cts.Token);
+            .PublishSearchRequestAsync(userId, cts.Token);
     }
 }

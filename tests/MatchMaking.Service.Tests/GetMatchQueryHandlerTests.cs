@@ -1,3 +1,4 @@
+using AutoFixture;
 using MatchMaking.Service.Application.Abstractions;
 using MatchMaking.Service.Application.Queries;
 using MatchMaking.Service.Domain.Models;
@@ -9,6 +10,7 @@ public class GetMatchQueryHandlerTests
 {
     private readonly IMatchRepository _repository = Substitute.For<IMatchRepository>();
     private readonly GetMatchQueryHandler _handler;
+    private readonly Fixture _fixture = new();
 
     public GetMatchQueryHandlerTests()
     {
@@ -18,26 +20,29 @@ public class GetMatchQueryHandlerTests
     [Fact]
     public async Task Handle_MatchExists_ReturnsMatchInfo()
     {
-        var expected = new MatchInfo("match-123", ["player1", "player2", "player3"]);
+        var userId = _fixture.Create<string>();
+        var expected = new MatchInfo(_fixture.Create<string>(), [userId, _fixture.Create<string>(), _fixture.Create<string>()]);
 
-        _repository.GetMatchByUserIdAsync("player1", Arg.Any<CancellationToken>())
+        _repository.GetMatchByUserIdAsync(userId, Arg.Any<CancellationToken>())
             .Returns(expected);
 
-        var result = await _handler.Handle(new GetMatchQuery("player1"), CancellationToken.None);
+        var result = await _handler.Handle(new GetMatchQuery(userId), CancellationToken.None);
 
         Assert.NotNull(result);
-        Assert.Equal("match-123", result.MatchId);
-        Assert.Equal(3, result.UserIds.Length);
-        Assert.Contains("player1", result.UserIds);
+        Assert.Equal(expected.MatchId, result.MatchId);
+        Assert.Equal(expected.UserIds.Length, result.UserIds.Length);
+        Assert.Contains(userId, result.UserIds);
     }
 
     [Fact]
     public async Task Handle_NoMatch_ReturnsNull()
     {
-        _repository.GetMatchByUserIdAsync("unknown", Arg.Any<CancellationToken>())
+        var userId = _fixture.Create<string>();
+
+        _repository.GetMatchByUserIdAsync(userId, Arg.Any<CancellationToken>())
             .Returns((MatchInfo?)null);
 
-        var result = await _handler.Handle(new GetMatchQuery("unknown"), CancellationToken.None);
+        var result = await _handler.Handle(new GetMatchQuery(userId), CancellationToken.None);
 
         Assert.Null(result);
     }
@@ -45,14 +50,15 @@ public class GetMatchQueryHandlerTests
     [Fact]
     public async Task Handle_PassesCancellationToken()
     {
+        var userId = _fixture.Create<string>();
         using var cts = new CancellationTokenSource();
 
-        _repository.GetMatchByUserIdAsync("player1", Arg.Any<CancellationToken>())
+        _repository.GetMatchByUserIdAsync(userId, Arg.Any<CancellationToken>())
             .Returns((MatchInfo?)null);
 
-        await _handler.Handle(new GetMatchQuery("player1"), cts.Token);
+        await _handler.Handle(new GetMatchQuery(userId), cts.Token);
 
         await _repository.Received(1)
-            .GetMatchByUserIdAsync("player1", cts.Token);
+            .GetMatchByUserIdAsync(userId, cts.Token);
     }
 }

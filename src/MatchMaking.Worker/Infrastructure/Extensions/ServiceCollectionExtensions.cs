@@ -1,4 +1,5 @@
 using MatchMaking.Worker.Application.Abstractions;
+using MatchMaking.Contracts.Configuration;
 using MatchMaking.Worker.Infrastructure.Configuration;
 using MatchMaking.Worker.Infrastructure.Kafka;
 using MatchMaking.Worker.Infrastructure.Redis;

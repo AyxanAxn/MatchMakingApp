@@ -3,7 +3,7 @@ using Confluent.Kafka;
 using MatchMaking.Contracts.Constants;
 using MatchMaking.Contracts.Messages;
 using MatchMaking.Worker.Application.Abstractions;
-using MatchMaking.Worker.Infrastructure.Configuration;
+using MatchMaking.Contracts.Configuration;
 using Microsoft.Extensions.Options;
 
 namespace MatchMaking.Worker.Infrastructure.Kafka;
@@ -28,7 +28,7 @@ public sealed class MatchCompleteProducer : IMatchCompleteProducer, IDisposable
         _producer = new ProducerBuilder<string, string>(config).Build();
     }
 
-    public async Task PublishMatchCompleteAsync(string matchId, string[] userIds, CancellationToken cancellationToken = default)
+    public async Task PublishMatchCompleteAsync(string matchId, string[] userIds, CancellationToken cancellationToken)
     {
         var message = new MatchmakingComplete(matchId, userIds);
         var json = JsonSerializer.Serialize(message);

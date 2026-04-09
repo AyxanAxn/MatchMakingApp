@@ -3,7 +3,7 @@ using Confluent.Kafka;
 using MatchMaking.Contracts.Constants;
 using MatchMaking.Contracts.Messages;
 using MatchMaking.Worker.Application.Commands;
-using MatchMaking.Worker.Infrastructure.Configuration;
+using MatchMaking.Contracts.Configuration;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;

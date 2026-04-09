@@ -13,43 +13,10 @@ public sealed class RedisPlayerQueue(
 {
     private readonly int _batchSize = options.Value.PlayersPerMatch;
 
-    // This Lua script runs atomically inside Redis, so two workers
-    // can never pop the same players — no race conditions possible.
-    private const string MatchmakingScript = """
-        local queue = KEYS[1]              -- "matchmaking:queue"
-        local userId = ARGV[1]             -- the player joining the queue
-        local requiredPlayers = tonumber(ARGV[2])  -- e.g. 3
-
-        -- Skip if player is already in the queue (prevent duplicates)
-        local pos = redis.call('LPOS', queue, userId)
-        if pos then
-            return nil
-        end
-
-        -- RPUSH = add to end of list (like Enqueue)
-        redis.call('RPUSH', queue, userId)
-
-        -- LLEN = get list length (count of waiting players)
-        local playerCount = redis.call('LLEN', queue)
-
-        -- Not enough players yet — just wait
-        if playerCount < requiredPlayers then
-            return nil
-        end
-
-        -- LPOP = remove from front of list (like Dequeue)
-        local players = {}
-        for i = 1, requiredPlayers do
-            players[i] = redis.call('LPOP', queue)
-        end
-
-        return players
-        """;
-
     private const string QueueKeyName = "matchmaking:queue";
     private static readonly RedisKey QueueKey = new(QueueKeyName);
 
-    public async Task<string[]?> AddAndTryPopBatchAsync(string userId, CancellationToken cancellationToken = default)
+    public async Task<string[]?> AddAndTryPopBatchAsync(string userId, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -57,27 +24,25 @@ public sealed class RedisPlayerQueue(
 
         try
         {
-            var result = await db.ScriptEvaluateAsync(
-                MatchmakingScript,
-                [QueueKey],
-                [userId, _batchSize]);
+            await db.ListRightPushAsync(QueueKey, userId);
+            logger.LogDebug("Player {UserId} added to queue", userId);
 
-            if (result.IsNull)
-                return null;
+            var popped = await db.ListLeftPopAsync(QueueKey, _batchSize);
 
-            var values = (RedisResult[])result!;
-            var players = values
-                .Where(v => !v.IsNull)
-                .Select(v => (string)v!)
-                .ToArray();
-
-            if (players.Length != _batchSize)
+            if (popped is null || popped.Length < _batchSize)
             {
-                logger.LogWarning(
-                    "Expected {BatchSize} players but got {Count} — queue may have been modified externally",
-                    _batchSize, players.Length);
+                if (popped is { Length: > 0 })
+                {
+                    await db.ListLeftPushAsync(QueueKey, popped);
+                    logger.LogDebug("Not enough players ({Count}/{BatchSize}), pushed back to queue",
+                        popped.Length, _batchSize);
+                }
+
                 return null;
             }
+
+            var players = popped.Select(v => (string)v!).ToArray();
+            logger.LogInformation("Popped {Count} players from queue for match", players.Length);
 
             return players;
         }
@@ -88,7 +53,7 @@ public sealed class RedisPlayerQueue(
         }
     }
 
-    public async Task ReAddPlayersAsync(string[] userIds, CancellationToken cancellationToken = default)
+    public async Task ReAddPlayersAsync(string[] userIds, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 

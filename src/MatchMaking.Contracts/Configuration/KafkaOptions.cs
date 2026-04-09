@@ -1,4 +1,4 @@
-namespace MatchMaking.Worker.Infrastructure.Configuration;
+namespace MatchMaking.Contracts.Configuration;
 
 public sealed class KafkaOptions
 {
