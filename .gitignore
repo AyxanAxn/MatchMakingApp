@@ -1,0 +1,23 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstats
+
+## VS / Rider
+.vs/
+*.DotSettings.user
+.idea/
+
+## OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+## Docker
+docker-compose.override.yml
+
+## Claude
+.claude/
